@@ -10,6 +10,8 @@ export interface RouteGenerationOptions {
   maxWaypointsPerSegment?: number;
   optimizeDistance?: boolean;
   distanceTolerance?: number;
+  gridMode?: boolean;      // Enable grid-aware path generation
+  blockSize?: number;      // City block size for grid mode
   onProgress?: (progress: number, step: string) => void;
 }
 
@@ -32,7 +34,7 @@ export interface GeneratedRoute {
  */
 export async function generateRoute(
   normalizedPath: Point2D[],
-  userLocation: LatLng,
+  routeCenter: LatLng,
   options: RouteGenerationOptions
 ): Promise<GeneratedRoute> {
   const {
@@ -41,6 +43,8 @@ export async function generateRoute(
     maxWaypointsPerSegment = 8,
     optimizeDistance: shouldOptimize = true,
     distanceTolerance = 0.15,
+    gridMode = false,
+    blockSize = 100,
     onProgress,
   } = options;
 
@@ -48,8 +52,10 @@ export async function generateRoute(
     // Step 1: Convert to geographic coordinates (5%)
     onProgress?.(5, 'Converting to geographic coordinates...');
 
-    const geoPath = pathToGeo(normalizedPath, userLocation, {
+    const geoPath = pathToGeo(normalizedPath, routeCenter, {
       targetDistance,
+      useGridMode: gridMode,
+      blockSize,
     });
 
     console.log('Geographic path generated:', {
@@ -63,7 +69,7 @@ export async function generateRoute(
     const snappedRoute = await snapToRoads(geoPath, {
       numSegments,
       maxWaypointsPerSegment,
-      travelMode: 'WALKING',
+      travelMode: 'BICYCLING',
       onProgress: (snapProgress, message) => {
         // Map snap progress to 10-80% range
         const overallProgress = 10 + (snapProgress / 100) * 70;
@@ -135,7 +141,7 @@ export async function generateRoute(
  */
 export function validateRouteInputs(
   normalizedPath: Point2D[] | null,
-  userLocation: LatLng | null,
+  routeCenter: LatLng | null,
   targetDistance: number
 ): { valid: boolean; error?: string } {
   if (!normalizedPath || normalizedPath.length === 0) {
@@ -146,8 +152,8 @@ export function validateRouteInputs(
     return { valid: false, error: 'Path must have at least 2 points.' };
   }
 
-  if (!userLocation) {
-    return { valid: false, error: 'Location not available. Please enable location access.' };
+  if (!routeCenter) {
+    return { valid: false, error: 'Location not available. Please select a location on the map or enable GPS.' };
   }
 
   if (targetDistance < 500) {

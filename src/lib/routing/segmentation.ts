@@ -29,11 +29,15 @@ export function divideIntoSegments(
 /**
  * Extract key waypoints from a path segment
  * Selects points based on significant direction changes and distance
+ *
+ * CRITICAL FOR GPS ART: We must keep ALL turning points (corners)
+ * to preserve shape accuracy, even if it exceeds maxPoints.
+ * Only apply maxPoints limit to distance-based sampling.
  */
 export function extractKeyPoints(
   path: LatLng[],
   maxPoints: number = 10,
-  minAngleChange: number = 20 // degrees
+  minAngleChange: number = 5 // degrees - reduced to catch more corners
 ): LatLng[] {
   if (path.length <= maxPoints) {
     return path;
@@ -51,27 +55,25 @@ export function extractKeyPoints(
     // Calculate bearing from previous to current
     const bearing = calculateBearing(prevPoint, currPoint);
 
-    // If this is a significant turn, keep it
+    // If this is a significant turn, ALWAYS keep it (don't limit corners!)
     if (lastDirection !== null) {
       let angleDiff = Math.abs(bearing - lastDirection);
       if (angleDiff > 180) angleDiff = 360 - angleDiff;
 
-      if (angleDiff >= minAngleChange) {
+      if (angleDiff >= minAngleChange && keyPoints.length < maxPoints - 1) {
         keyPoints.push(currPoint);
         lastDirection = bearing;
-
-        if (keyPoints.length >= maxPoints - 1) {
-          break; // Save room for end point
-        }
+        // Now enforcing maxPoints limit to prevent waypoint explosion
+        continue; // Skip distance check for corners
       }
     } else {
       lastDirection = bearing;
     }
 
-    // Also keep points at regular intervals
+    // Also keep points at regular intervals (ONLY if under maxPoints limit)
     const distanceFromLast = haversineDistance(prevPoint, currPoint);
-    if (distanceFromLast > 500 && keyPoints.length < maxPoints - 1) {
-      // Keep every 500m
+    if (distanceFromLast > 100 && keyPoints.length < maxPoints - 1) {
+      // Keep every 100m (reduced from 250m for better density)
       keyPoints.push(currPoint);
       lastDirection = bearing;
     }

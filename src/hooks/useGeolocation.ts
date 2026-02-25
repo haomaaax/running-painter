@@ -2,12 +2,18 @@ import { useEffect, useState } from 'react';
 import { LatLng } from '../types/route';
 import { useRouteStore } from '../store/routeStore';
 
-export function useGeolocation() {
-  const [loading, setLoading] = useState(true);
+export function useGeolocation(enabled: boolean = true) {
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
   const setUserLocation = useRouteStore((state) => state.setUserLocation);
 
   useEffect(() => {
+    // If GPS is disabled, don't request it
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser');
       setLoading(false);
@@ -64,7 +70,7 @@ export function useGeolocation() {
     return () => {
       navigator.geolocation.clearWatch(watchId);
     };
-  }, [setUserLocation]);
+  }, [enabled, setUserLocation]);
 
   return { loading, error };
 }

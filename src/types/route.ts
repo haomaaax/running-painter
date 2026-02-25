@@ -22,3 +22,10 @@ export interface RouteGenerationProgress {
   step: string;
   progress: number; // 0-100
 }
+
+export interface SuggestedLocation {
+  center: LatLng;
+  score: number;           // 0-100, higher is better
+  gridAngle: number;       // Primary grid orientation (degrees)
+  description: string;     // e.g., "Downtown Grid"
+}

@@ -19,6 +19,8 @@ export default function InputForm() {
     setDistance,
     idealPath,
     setIdealPath,
+    gridMode,
+    setGridMode,
     error: storeError,
   } = useRouteStore();
 
@@ -177,6 +179,32 @@ export default function InputForm() {
           <span>1 km</span>
           <span>50 km</span>
         </div>
+      </div>
+
+      {/* Grid Mode Toggle */}
+      <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={gridMode}
+            onChange={(e) => setGridMode(e.target.checked)}
+            style={{
+              width: '18px',
+              height: '18px',
+              marginRight: '8px',
+              cursor: 'pointer',
+            }}
+          />
+          <div>
+            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#15803d' }}>
+              Grid Mode (Recommended) ✨
+            </span>
+            <p style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '2px' }}>
+              Perfect for grid cities like Taipei! Converts paths to rectangular blocks for clearer GPS art.
+              Note: Grid mode may increase route distance by 30-50% (automatically compensated).
+            </p>
+          </div>
+        </label>
       </div>
 
       {/* Preview */}

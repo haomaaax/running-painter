@@ -2,6 +2,14 @@ import opentype from 'opentype.js';
 import { Point2D } from '../../types/route';
 import { normalizePath } from './normalizer';
 import { simplifyPath, removeDuplicates } from './pathSimplifier';
+import { optimizeStrokeOrder } from './strokeOptimizer';
+import { mergeStrokes } from './strokeMerger';
+import { textToAnalogPath } from './analogDigits';
+
+export interface TextStroke {
+  points: Point2D[];
+  id: string;
+}
 
 // Font cache to avoid reloading
 let cachedFont: opentype.Font | null = null;
@@ -50,7 +58,158 @@ async function loadFont(): Promise<opentype.Font> {
 }
 
 /**
- * Convert text to path using opentype.js
+ * Convert text to separate strokes
+ *
+ * Detects pen lifts ('M' commands) to split text into independent strokes.
+ * This prevents retracing when connecting characters.
+ */
+async function textToStrokes(text: string): Promise<TextStroke[]> {
+  const font = await loadFont();
+  const fontSize = 200;
+  const path = font.getPath(text, 0, fontSize, fontSize);
+
+  const strokes: TextStroke[] = [];
+  let currentStroke: Point2D[] = [];
+  let strokeId = 0;
+
+  path.commands.forEach((cmd) => {
+    switch (cmd.type) {
+      case 'M': // Move to - START NEW STROKE (pen lift!)
+        // Save previous stroke if it exists
+        if (currentStroke.length > 0) {
+          strokes.push({
+            points: currentStroke,
+            id: `stroke-${strokeId++}`,
+          });
+          currentStroke = [];
+        }
+
+        // Start new stroke at this position
+        if ('x' in cmd && 'y' in cmd) {
+          currentStroke.push({ x: cmd.x, y: cmd.y });
+        }
+        break;
+
+      case 'L': // Line to - CONTINUE CURRENT STROKE
+        if ('x' in cmd && 'y' in cmd) {
+          currentStroke.push({ x: cmd.x, y: cmd.y });
+        }
+        break;
+
+      case 'C': // Bezier curve - CONTINUE CURRENT STROKE
+        if ('x' in cmd && 'y' in cmd && 'x1' in cmd && 'y1' in cmd && 'x2' in cmd && 'y2' in cmd) {
+          const prevPoint = currentStroke.length > 0 ? currentStroke[currentStroke.length - 1] : { x: 0, y: 0 };
+          const samples = 10;
+
+          for (let t = 0; t <= samples; t++) {
+            const tNorm = t / samples;
+            const point = cubicBezier(
+              prevPoint,
+              { x: cmd.x1, y: cmd.y1 },
+              { x: cmd.x2, y: cmd.y2 },
+              { x: cmd.x, y: cmd.y },
+              tNorm
+            );
+            currentStroke.push(point);
+          }
+        }
+        break;
+
+      case 'Q': // Quadratic bezier curve - CONTINUE CURRENT STROKE
+        if ('x' in cmd && 'y' in cmd && 'x1' in cmd && 'y1' in cmd) {
+          const prevPoint = currentStroke.length > 0 ? currentStroke[currentStroke.length - 1] : { x: 0, y: 0 };
+          const samples = 10;
+
+          for (let t = 0; t <= samples; t++) {
+            const tNorm = t / samples;
+            const point = quadraticBezier(
+              prevPoint,
+              { x: cmd.x1, y: cmd.y1 },
+              { x: cmd.x, y: cmd.y },
+              tNorm
+            );
+            currentStroke.push(point);
+          }
+        }
+        break;
+
+      case 'Z': // Close path - END CURRENT STROKE
+        if (currentStroke.length > 0) {
+          // Close the stroke (connect back to first point)
+          currentStroke.push(currentStroke[0]);
+          strokes.push({
+            points: currentStroke,
+            id: `stroke-${strokeId++}`,
+          });
+          currentStroke = [];
+        }
+        break;
+    }
+  });
+
+  // Save final stroke if it exists
+  if (currentStroke.length > 0) {
+    strokes.push({
+      points: currentStroke,
+      id: `stroke-${strokeId++}`,
+    });
+  }
+
+  return strokes;
+}
+
+/**
+ * Calculate the area of a stroke using the shoelace formula
+ * Larger area = outer outline, smaller area = inner holes
+ */
+function calculateStrokeArea(points: Point2D[]): number {
+  if (points.length < 3) return 0;
+
+  let area = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    area += points[i].x * points[i + 1].y - points[i + 1].x * points[i].y;
+  }
+  return Math.abs(area / 2);
+}
+
+/**
+ * Filter out inner strokes (holes in characters like 0, 6, 8, etc.)
+ * Keep only outer outlines for single-line pen drawing style
+ */
+function filterOuterStrokes(strokes: TextStroke[]): TextStroke[] {
+  if (strokes.length === 0) return strokes;
+
+  // Calculate area for each stroke
+  const strokesWithArea = strokes.map(stroke => ({
+    stroke,
+    area: calculateStrokeArea(stroke.points),
+  }));
+
+  // Find the maximum area
+  const maxArea = Math.max(...strokesWithArea.map(s => s.area));
+
+  // Keep ONLY strokes with the maximum area (the largest outline)
+  // This ensures true single-line pen drawing style
+  const filtered = strokesWithArea
+    .filter(s => s.area === maxArea)
+    .map(s => s.stroke);
+
+  console.log(`Filtered ${strokes.length} strokes down to ${filtered.length} outer strokes (largest only)`);
+
+  return filtered;
+}
+
+/**
+ * Convert text to path using stroke-based approach
+ *
+ * Pipeline:
+ * 1. Split text into separate strokes (detects pen lifts)
+ * 2. Filter outer strokes only (removes inner holes - single-line pen drawing style)
+ * 3. Optimize stroke order (TSP - minimize connector distance)
+ * 4. Merge strokes into single continuous path
+ * 5. Normalize and simplify
+ *
+ * This prevents retracing and creates a clear START → END flow with single-line outlines
  */
 export async function textToPath(text: string): Promise<Point2D[]> {
   if (!text || text.trim().length === 0) {
@@ -58,87 +217,26 @@ export async function textToPath(text: string): Promise<Point2D[]> {
   }
 
   try {
-    const font = await loadFont();
+    // Use analog clock-style digits (simple, clean geometry for GPS art)
+    const analogPath = textToAnalogPath(text);
 
-    // Convert text to path
-    // Use larger font size for better quality, we'll normalize later
-    const fontSize = 200;
-    const path = font.getPath(text, 0, fontSize, fontSize);
+    console.log(`Text "${text}" converted to analog path with ${analogPath.length} points`);
 
-    // Convert opentype path commands to points
-    const points: Point2D[] = [];
-
-    // Sample points along the path
-    path.commands.forEach((cmd) => {
-      switch (cmd.type) {
-        case 'M': // Move to
-        case 'L': // Line to
-          if ('x' in cmd && 'y' in cmd) {
-            points.push({ x: cmd.x, y: cmd.y });
-          }
-          break;
-
-        case 'C': // Cubic bezier curve
-          if ('x' in cmd && 'y' in cmd && 'x1' in cmd && 'y1' in cmd && 'x2' in cmd && 'y2' in cmd) {
-            // Sample points along the curve
-            const prevPoint = points.length > 0 ? points[points.length - 1] : { x: 0, y: 0 };
-            const samples = 10;
-
-            for (let t = 0; t <= samples; t++) {
-              const tNorm = t / samples;
-              const point = cubicBezier(
-                prevPoint,
-                { x: cmd.x1, y: cmd.y1 },
-                { x: cmd.x2, y: cmd.y2 },
-                { x: cmd.x, y: cmd.y },
-                tNorm
-              );
-              points.push(point);
-            }
-          }
-          break;
-
-        case 'Q': // Quadratic bezier curve
-          if ('x' in cmd && 'y' in cmd && 'x1' in cmd && 'y1' in cmd) {
-            const prevPoint = points.length > 0 ? points[points.length - 1] : { x: 0, y: 0 };
-            const samples = 10;
-
-            for (let t = 0; t <= samples; t++) {
-              const tNorm = t / samples;
-              const point = quadraticBezier(
-                prevPoint,
-                { x: cmd.x1, y: cmd.y1 },
-                { x: cmd.x, y: cmd.y },
-                tNorm
-              );
-              points.push(point);
-            }
-          }
-          break;
-
-        case 'Z': // Close path
-          if (points.length > 0) {
-            points.push(points[0]); // Close the path
-          }
-          break;
-      }
-    });
-
-    if (points.length === 0) {
-      throw new Error('No path data generated from text');
-    }
-
-    // Flip Y axis (fonts have inverted Y)
-    const flipped = points.map(p => ({ x: p.x, y: -p.y }));
+    // Flip Y axis (analog coords are top=0, but map needs proper orientation)
+    const flipped = analogPath.map(p => ({ x: p.x, y: 1 - p.y }));
 
     // Remove duplicates
-    const cleaned = removeDuplicates(flipped, 0.1);
+    const cleaned = removeDuplicates(flipped, 0.01);
 
-    // Simplify path (reduce from potentially thousands of points to ~100)
-    const simplified = simplifyPath(cleaned, 2.0);
+    // Simplify path (light simplification for clean paths)
+    const simplified = simplifyPath(cleaned, 0.02);
 
     // Normalize to 0-1 coordinate space
-    return normalizePath(simplified);
+    const normalized = normalizePath(simplified);
+
+    console.log(`Final normalized path: ${normalized.length} points`);
+
+    return normalized;
 
   } catch (error) {
     if (error instanceof Error) {

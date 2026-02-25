@@ -7,7 +7,13 @@ export function useRouteGenerator() {
 
   const idealPath = useRouteStore((state) => state.idealPath);
   const userLocation = useRouteStore((state) => state.userLocation);
+  const selectedCenter = useRouteStore((state) => state.selectedCenter);
   const targetDistance = useRouteStore((state) => state.targetDistance);
+  const gridMode = useRouteStore((state) => state.gridMode);
+  const blockSize = useRouteStore((state) => state.blockSize);
+
+  // Use selected center if available, otherwise fall back to GPS location
+  const routeCenter = selectedCenter || userLocation;
 
   const setProgress = useRouteStore((state) => state.setProgress);
   const setSnappedRoute = useRouteStore((state) => state.setSnappedRoute);
@@ -16,7 +22,7 @@ export function useRouteGenerator() {
 
   const generateRunningRoute = async () => {
     // Validate inputs
-    const validation = validateRouteInputs(idealPath, userLocation, targetDistance);
+    const validation = validateRouteInputs(idealPath, routeCenter, targetDistance);
 
     if (!validation.valid) {
       setError(validation.error || 'Invalid inputs');
@@ -30,13 +36,15 @@ export function useRouteGenerator() {
     try {
       const result = await generateRoute(
         idealPath!,
-        userLocation!,
+        routeCenter!,
         {
           targetDistance,
-          numSegments: 5,
-          maxWaypointsPerSegment: 8,
-          optimizeDistance: true,
+          numSegments: 5,              // Reduced from 10 to reduce API overhead
+          maxWaypointsPerSegment: 10,  // Reduced from 23 to give Google more routing freedom
+          optimizeDistance: false,
           distanceTolerance: 0.15,
+          gridMode,
+          blockSize,
           onProgress: (progress, step) => {
             setProgress(progress, step);
           },

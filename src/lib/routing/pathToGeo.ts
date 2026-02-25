@@ -2,11 +2,15 @@ import { Point2D, LatLng } from '../../types/route';
 import { getBounds } from '../vectorization/normalizer';
 import { calculatePathLength } from '../vectorization/normalizer';
 import { metersToLatLngOffset, addOffset } from '../utils/coordinates';
+import { generateGridArtPath } from './gridPathGenerator';
+import { formatDistance } from '../utils/distance';
 
 export interface PathToGeoOptions {
   targetDistance?: number; // Target distance in meters
   rotation?: number; // Rotation in degrees
   scale?: number; // Manual scale override
+  useGridMode?: boolean; // Enable grid-aware path generation (for grid cities)
+  blockSize?: number; // City block size in meters (for grid mode)
 }
 
 /**
@@ -32,10 +36,53 @@ export function pathToGeo(
     return [];
   }
 
-  const { targetDistance = 10000, rotation = 0, scale } = options;
+  const {
+    targetDistance = 10000,
+    rotation = 0,
+    scale,
+    useGridMode = false,
+    blockSize = 100,
+  } = options;
+
+  // GRID MODE: Convert smooth path to Manhattan-style grid path
+  // This is THE KEY to making GPS art work on grid streets!
+  let pathToConvert = normalizedPath;
+  if (useGridMode) {
+    pathToConvert = generateGridArtPath(normalizedPath, {
+      blockSize,
+      snapToBlocks: true,
+    });
+    console.log('🎨 Grid mode enabled:', {
+      originalPoints: normalizedPath.length,
+      gridPoints: pathToConvert.length,
+      blockSize,
+    });
+  }
 
   // 1. Calculate the path's approximate perimeter in normalized space
-  const normalizedLength = calculatePathLength(normalizedPath);
+  const normalizedLength = calculatePathLength(pathToConvert);
+
+  // GRID INFLATION COMPENSATION: Adjust target distance to compensate for Manhattan path inflation
+  let adjustedTargetDistance = targetDistance;
+
+  if (useGridMode) {
+    // Calculate how much the grid conversion inflated the path
+    const originalLength = calculatePathLength(normalizedPath);
+    const gridLength = normalizedLength;
+    const gridInflationFactor = gridLength / originalLength;
+
+    // Reduce target to compensate for grid's inherent length increase
+    // Use max(1.3, factor) to avoid over-compensation
+    adjustedTargetDistance = targetDistance / Math.max(1.3, gridInflationFactor);
+
+    console.log('📏 Grid inflation compensation:', {
+      originalLength: originalLength.toFixed(3),
+      gridLength: gridLength.toFixed(3),
+      inflationFactor: `${gridInflationFactor.toFixed(2)}x`,
+      targetBefore: formatDistance(targetDistance),
+      targetAfter: formatDistance(adjustedTargetDistance),
+    });
+  }
 
   if (normalizedLength === 0) {
     // Single point or all points are the same
@@ -43,27 +90,29 @@ export function pathToGeo(
   }
 
   // 2. Determine scale factor
-  // We want the path length to approximately match targetDistance
+  // We want the path length to approximately match adjustedTargetDistance
+  // (which compensates for grid mode inflation if enabled)
   // Since normalized path is 0-1, we scale it to meters
   let scaleFactor: number;
 
   if (scale !== undefined) {
     scaleFactor = scale;
   } else {
-    // Calculate scale based on target distance
+    // Calculate scale based on adjusted target distance
     // We use a conservative multiplier to account for the fact that
     // the path might not be a perfect line
-    scaleFactor = targetDistance / normalizedLength;
+    scaleFactor = adjustedTargetDistance / normalizedLength;
   }
 
   // 3. Get bounds of normalized path
-  const bounds = getBounds(normalizedPath);
+  const bounds = getBounds(pathToConvert);
 
   // 4. Convert each point
-  const geoPath: LatLng[] = normalizedPath.map(point => {
+  const geoPath: LatLng[] = pathToConvert.map(point => {
     // Center the point (so path is centered around 0,0)
     let x = point.x - bounds.centerX;
-    let y = point.y - bounds.centerY;
+    // IMPORTANT: Flip Y axis - in graphics Y goes down, in geo Y (lat) goes up (north)
+    let y = -(point.y - bounds.centerY);
 
     // Apply rotation if specified
     if (rotation !== 0) {

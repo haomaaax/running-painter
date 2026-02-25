@@ -26,6 +26,13 @@ export default function RouteInfo() {
 
   return (
     <>
+      {/* Add spinner animation */}
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+
       {/* Generate Route Button */}
       {!hasSnappedRoute && (
         <div style={{ marginTop: '20px' }}>
@@ -58,18 +65,68 @@ export default function RouteInfo() {
             {isGenerating ? `Generating... ${progress}%` : 'Generate Running Route'}
           </button>
 
-          {/* Progress Info */}
-          {isGenerating && currentStep && (
+          {/* Enhanced Loading Indicator */}
+          {isGenerating && (
             <div style={{
-              marginTop: '8px',
-              padding: '8px',
-              backgroundColor: '#f3f4f6',
-              borderRadius: '4px',
-              fontSize: '0.75rem',
-              color: '#666',
-              textAlign: 'center'
+              marginTop: '16px',
+              padding: '16px',
+              backgroundColor: '#eff6ff',
+              border: '2px solid #3b82f6',
+              borderRadius: '8px',
             }}>
-              {currentStep}
+              {/* Progress Bar */}
+              <div style={{
+                width: '100%',
+                height: '8px',
+                backgroundColor: '#dbeafe',
+                borderRadius: '4px',
+                overflow: 'hidden',
+                marginBottom: '12px',
+              }}>
+                <div style={{
+                  width: `${progress}%`,
+                  height: '100%',
+                  backgroundColor: '#3b82f6',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+
+              {/* Progress Text */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}>
+                  {/* Spinner */}
+                  <div style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid #3b82f6',
+                    borderTopColor: 'transparent',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                  }} />
+                  <span style={{
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    color: '#1e40af',
+                  }}>
+                    {currentStep}
+                  </span>
+                </div>
+                <span style={{
+                  fontSize: '0.875rem',
+                  fontWeight: '600',
+                  color: '#1e40af',
+                }}>
+                  {progress}%
+                </span>
+              </div>
             </div>
           )}
 

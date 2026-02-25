@@ -8,25 +8,33 @@ export default function RoutePreview() {
   const map = useMap();
   const idealPath = useRouteStore((state) => state.idealPath);
   const userLocation = useRouteStore((state) => state.userLocation);
+  const selectedCenter = useRouteStore((state) => state.selectedCenter);
   const targetDistance = useRouteStore((state) => state.targetDistance);
+  const gridMode = useRouteStore((state) => state.gridMode);
+  const blockSize = useRouteStore((state) => state.blockSize);
   const setGeoPath = useRouteStore((state) => state.setGeoPath);
   const geoPath = useRouteStore((state) => state.geoPath);
   const snappedRoute = useRouteStore((state) => state.snappedRoute);
+
+  // Use selected center if available, otherwise fall back to GPS
+  const routeCenter = selectedCenter || userLocation;
 
   const polylinesRef = useRef<google.maps.Polyline[]>([]);
   const markersRef = useRef<google.maps.Marker[]>([]);
 
   // Convert ideal path to geo coordinates
   useEffect(() => {
-    if (!idealPath || !userLocation) {
+    if (!idealPath || !routeCenter) {
       setGeoPath(null);
       return;
     }
 
     try {
       // Convert normalized path to geographic coordinates
-      const geoPath = pathToGeo(idealPath, userLocation, {
+      const geoPath = pathToGeo(idealPath, routeCenter, {
         targetDistance,
+        useGridMode: gridMode,
+        blockSize,
       });
 
       setGeoPath(geoPath);
@@ -43,7 +51,7 @@ export default function RoutePreview() {
       console.error('Error converting path to geo:', error);
       setGeoPath(null);
     }
-  }, [idealPath, userLocation, targetDistance, setGeoPath]);
+  }, [idealPath, routeCenter, targetDistance, gridMode, blockSize, setGeoPath]);
 
   // Render polylines and markers on the map
   useEffect(() => {
