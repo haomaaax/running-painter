@@ -39,8 +39,8 @@ export async function generateRoute(
 ): Promise<GeneratedRoute> {
   const {
     targetDistance,
-    numSegments = 5,
-    maxWaypointsPerSegment = 8,
+    numSegments = 8,
+    maxWaypointsPerSegment = 18,
     optimizeDistance: shouldOptimize = true,
     distanceTolerance = 0.15,
     gridMode = false,

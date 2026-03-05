@@ -9,6 +9,7 @@ export function useRouteGenerator() {
   const userLocation = useRouteStore((state) => state.userLocation);
   const selectedCenter = useRouteStore((state) => state.selectedCenter);
   const targetDistance = useRouteStore((state) => state.targetDistance);
+  const inputType = useRouteStore((state) => state.inputType);
   const gridMode = useRouteStore((state) => state.gridMode);
   const blockSize = useRouteStore((state) => state.blockSize);
 
@@ -33,17 +34,19 @@ export function useRouteGenerator() {
     setError(null);
     setProgress(0, 'Starting route generation...');
 
+    const effectiveGridMode = gridMode && inputType === 'shape';
+
     try {
       const result = await generateRoute(
         idealPath!,
         routeCenter!,
         {
           targetDistance,
-          numSegments: 5,              // Reduced from 10 to reduce API overhead
-          maxWaypointsPerSegment: 10,  // Reduced from 23 to give Google more routing freedom
+          numSegments: 8,              // Higher segmentation improves local shape adherence
+          maxWaypointsPerSegment: 18,  // Denser waypoints reduce large detours between anchors
           optimizeDistance: false,
           distanceTolerance: 0.15,
-          gridMode,
+          gridMode: effectiveGridMode,
           blockSize,
           onProgress: (progress, step) => {
             setProgress(progress, step);

@@ -29,8 +29,8 @@ export async function snapToRoads(
   options: SnapOptions = {}
 ): Promise<LatLng[]> {
   const {
-    numSegments = 5,
-    maxWaypointsPerSegment = 8,
+    numSegments = 8,
+    maxWaypointsPerSegment = 18,
     travelMode = 'WALKING',
     onProgress,
   } = options;

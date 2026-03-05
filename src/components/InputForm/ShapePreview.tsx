@@ -63,8 +63,7 @@ export default function ShapePreview({ points, width = 300, height = 200 }: Shap
 
     points.forEach((point, index) => {
       const x = point.x * scaleX + padding;
-      // FLIP Y-axis: Canvas Y goes down, but text Y goes up
-      const y = (1 - point.y) * scaleY + padding;
+      const y = point.y * scaleY + padding;
 
       if (index === 0) {
         ctx.moveTo(x, y);
@@ -79,8 +78,7 @@ export default function ShapePreview({ points, width = 300, height = 200 }: Shap
     ctx.fillStyle = '#ef4444';
     points.forEach((point) => {
       const x = point.x * scaleX + padding;
-      // FLIP Y-axis: Canvas Y goes down, but text Y goes up
-      const y = (1 - point.y) * scaleY + padding;
+      const y = point.y * scaleY + padding;
 
       ctx.beginPath();
       ctx.arc(x, y, 3, 0, Math.PI * 2);

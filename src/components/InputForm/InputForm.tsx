@@ -188,20 +188,21 @@ export default function InputForm() {
             type="checkbox"
             checked={gridMode}
             onChange={(e) => setGridMode(e.target.checked)}
+            disabled={localInputType === 'text'}
             style={{
               width: '18px',
               height: '18px',
               marginRight: '8px',
-              cursor: 'pointer',
+              cursor: localInputType === 'text' ? 'not-allowed' : 'pointer',
             }}
           />
           <div>
             <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#15803d' }}>
-              Grid Mode (Recommended) ✨
+              Grid Mode (Shape Only) ✨
             </span>
             <p style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '2px' }}>
-              Perfect for grid cities like Taipei! Converts paths to rectangular blocks for clearer GPS art.
-              Note: Grid mode may increase route distance by 30-50% (automatically compensated).
+              Works for shape input in grid cities like Taipei by converting paths to rectangular blocks.
+              Text input keeps analog-style strokes to preserve digit/letter appearance.
             </p>
           </div>
         </label>

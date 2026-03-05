@@ -222,14 +222,11 @@ export async function textToPath(text: string): Promise<Point2D[]> {
 
     console.log(`Text "${text}" converted to analog path with ${analogPath.length} points`);
 
-    // Flip Y axis (analog coords are top=0, but map needs proper orientation)
-    const flipped = analogPath.map(p => ({ x: p.x, y: 1 - p.y }));
-
     // Remove duplicates
-    const cleaned = removeDuplicates(flipped, 0.01);
+    const cleaned = removeDuplicates(analogPath, 0.01);
 
-    // Simplify path (light simplification for clean paths)
-    const simplified = simplifyPath(cleaned, 0.02);
+    // Simplify path conservatively to preserve character corners for routing.
+    const simplified = simplifyPath(cleaned, 0.01);
 
     // Normalize to 0-1 coordinate space
     const normalized = normalizePath(simplified);

@@ -1,6 +1,40 @@
 import { LatLng } from '../../types/route';
 import { haversineDistance, calculateBearing } from '../utils/distance';
 
+function buildCumulativeDistances(path: LatLng[]): number[] {
+  const distances: number[] = [0];
+  let total = 0;
+
+  for (let i = 1; i < path.length; i++) {
+    total += haversineDistance(path[i - 1], path[i]);
+    distances.push(total);
+  }
+
+  return distances;
+}
+
+function findClosestDistanceIndex(
+  cumulativeDistances: number[],
+  targetDistance: number,
+  startSearchIndex: number = 1
+): number {
+  let index = Math.max(1, startSearchIndex);
+
+  while (
+    index < cumulativeDistances.length - 1 &&
+    cumulativeDistances[index] < targetDistance
+  ) {
+    index++;
+  }
+
+  const prevIndex = index - 1;
+  const useCurrent =
+    Math.abs(cumulativeDistances[index] - targetDistance) <
+    Math.abs(cumulativeDistances[prevIndex] - targetDistance);
+
+  return useCurrent ? index : prevIndex;
+}
+
 /**
  * Divide a path into roughly equal segments
  */
@@ -10,16 +44,45 @@ export function divideIntoSegments(
 ): LatLng[][] {
   if (path.length === 0) return [];
   if (numSegments <= 1) return [path];
+  if (path.length === 1) return [path];
+
+  const segmentCount = Math.min(numSegments, path.length - 1);
+  const cumulativeDistances = buildCumulativeDistances(path);
+  const totalDistance = cumulativeDistances[cumulativeDistances.length - 1];
+
+  if (totalDistance === 0) {
+    return [path];
+  }
+
+  const targetSegmentLength = totalDistance / segmentCount;
+  const splitIndices: number[] = [0];
+  let searchStart = 1;
+
+  for (let i = 1; i < segmentCount; i++) {
+    const targetDistance = targetSegmentLength * i;
+    const candidateIndex = findClosestDistanceIndex(
+      cumulativeDistances,
+      targetDistance,
+      searchStart
+    );
+
+    const minIndex = splitIndices[splitIndices.length - 1] + 1;
+    const remainingSplits = segmentCount - i;
+    const maxIndex = path.length - 1 - remainingSplits;
+    const splitIndex = Math.max(minIndex, Math.min(candidateIndex, maxIndex));
+
+    splitIndices.push(splitIndex);
+    searchStart = splitIndex + 1;
+  }
+
+  splitIndices.push(path.length - 1);
 
   const segments: LatLng[][] = [];
-  const pointsPerSegment = Math.ceil(path.length / numSegments);
-
-  for (let i = 0; i < numSegments; i++) {
-    const start = i * pointsPerSegment;
-    const end = Math.min((i + 1) * pointsPerSegment + 1, path.length);
-
-    if (start < path.length) {
-      segments.push(path.slice(start, end));
+  for (let i = 0; i < splitIndices.length - 1; i++) {
+    const start = splitIndices[i];
+    const end = splitIndices[i + 1];
+    if (end > start) {
+      segments.push(path.slice(start, end + 1));
     }
   }
 
@@ -28,61 +91,76 @@ export function divideIntoSegments(
 
 /**
  * Extract key waypoints from a path segment
- * Selects points based on significant direction changes and distance
- *
- * CRITICAL FOR GPS ART: We must keep ALL turning points (corners)
- * to preserve shape accuracy, even if it exceeds maxPoints.
- * Only apply maxPoints limit to distance-based sampling.
+ * Prioritizes significant corners, then fills remaining slots with
+ * evenly spaced distance samples to avoid large waypoint gaps.
  */
 export function extractKeyPoints(
   path: LatLng[],
   maxPoints: number = 10,
   minAngleChange: number = 5 // degrees - reduced to catch more corners
 ): LatLng[] {
-  if (path.length <= maxPoints) {
+  if (path.length <= 2) {
     return path;
   }
 
-  const keyPoints: LatLng[] = [path[0]]; // Always include start
+  const pointLimit = Math.max(2, maxPoints);
+  if (path.length <= pointLimit) {
+    return path;
+  }
 
-  let lastDirection: number | null = null;
+  const cumulativeDistances = buildCumulativeDistances(path);
+  const totalDistance = cumulativeDistances[cumulativeDistances.length - 1];
 
+  if (totalDistance === 0) {
+    return [path[0], path[path.length - 1]];
+  }
+
+  // Detect corners with local direction changes and score by turn angle.
+  const cornerAngles = new Map<number, number>();
   for (let i = 1; i < path.length - 1; i++) {
-    const prevPoint = keyPoints[keyPoints.length - 1];
-    const currPoint = path[i];
-    const nextPoint = path[i + 1];
+    const bearingIn = calculateBearing(path[i - 1], path[i]);
+    const bearingOut = calculateBearing(path[i], path[i + 1]);
+    let angleDiff = Math.abs(bearingOut - bearingIn);
+    if (angleDiff > 180) angleDiff = 360 - angleDiff;
 
-    // Calculate bearing from previous to current
-    const bearing = calculateBearing(prevPoint, currPoint);
-
-    // If this is a significant turn, ALWAYS keep it (don't limit corners!)
-    if (lastDirection !== null) {
-      let angleDiff = Math.abs(bearing - lastDirection);
-      if (angleDiff > 180) angleDiff = 360 - angleDiff;
-
-      if (angleDiff >= minAngleChange && keyPoints.length < maxPoints - 1) {
-        keyPoints.push(currPoint);
-        lastDirection = bearing;
-        // Now enforcing maxPoints limit to prevent waypoint explosion
-        continue; // Skip distance check for corners
-      }
-    } else {
-      lastDirection = bearing;
-    }
-
-    // Also keep points at regular intervals (ONLY if under maxPoints limit)
-    const distanceFromLast = haversineDistance(prevPoint, currPoint);
-    if (distanceFromLast > 100 && keyPoints.length < maxPoints - 1) {
-      // Keep every 100m (reduced from 250m for better density)
-      keyPoints.push(currPoint);
-      lastDirection = bearing;
+    if (angleDiff >= minAngleChange) {
+      cornerAngles.set(i, angleDiff);
     }
   }
 
-  // Always include end
-  keyPoints.push(path[path.length - 1]);
+  const selectedIndices = new Set<number>([0, path.length - 1]);
+  const availableCornerSlots = Math.max(0, pointLimit - 2);
+  const topCornerIndices = Array.from(cornerAngles.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, availableCornerSlots)
+    .map(([index]) => index);
 
-  return keyPoints;
+  topCornerIndices.forEach((index) => selectedIndices.add(index));
+
+  // Fill remaining slots with evenly spaced distance samples to avoid sparse gaps.
+  const requiredSamples = pointLimit - selectedIndices.size;
+  let searchStart = 1;
+  for (let i = 1; i <= requiredSamples; i++) {
+    const targetDistance = (totalDistance * i) / (requiredSamples + 1);
+    const sampleIndex = findClosestDistanceIndex(
+      cumulativeDistances,
+      targetDistance,
+      searchStart
+    );
+
+    if (!selectedIndices.has(sampleIndex)) {
+      selectedIndices.add(sampleIndex);
+      searchStart = sampleIndex + 1;
+    }
+  }
+
+  // Backfill deterministically if collisions reduced sample count.
+  for (let i = 1; selectedIndices.size < pointLimit && i < path.length - 1; i++) {
+    selectedIndices.add(i);
+  }
+
+  const sortedIndices = Array.from(selectedIndices).sort((a, b) => a - b);
+  return sortedIndices.map((index) => path[index]);
 }
 
 /**

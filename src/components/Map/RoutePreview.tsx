@@ -7,6 +7,7 @@ import { calculatePathDistance, formatDistance } from '../../lib/utils/distance'
 export default function RoutePreview() {
   const map = useMap();
   const idealPath = useRouteStore((state) => state.idealPath);
+  const inputType = useRouteStore((state) => state.inputType);
   const userLocation = useRouteStore((state) => state.userLocation);
   const selectedCenter = useRouteStore((state) => state.selectedCenter);
   const targetDistance = useRouteStore((state) => state.targetDistance);
@@ -30,10 +31,12 @@ export default function RoutePreview() {
     }
 
     try {
+      const effectiveGridMode = gridMode && inputType === 'shape';
+
       // Convert normalized path to geographic coordinates
       const geoPath = pathToGeo(idealPath, routeCenter, {
         targetDistance,
-        useGridMode: gridMode,
+        useGridMode: effectiveGridMode,
         blockSize,
       });
 
@@ -51,7 +54,7 @@ export default function RoutePreview() {
       console.error('Error converting path to geo:', error);
       setGeoPath(null);
     }
-  }, [idealPath, routeCenter, targetDistance, gridMode, blockSize, setGeoPath]);
+  }, [idealPath, inputType, routeCenter, targetDistance, gridMode, blockSize, setGeoPath]);
 
   // Render polylines and markers on the map
   useEffect(() => {

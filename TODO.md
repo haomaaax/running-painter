@@ -149,12 +149,16 @@ The fundamental problem is **SCALE**. Even with 144 waypoints, they're spread to
    - Or: Increase waypoints to 500-1000 (but API limits are 25 per segment)
    - File: `src/lib/routing/pathToGeo.ts` - adjust scale calculation
 
-2. **INVESTIGATE WAYPOINT DISTRIBUTION**
+2. **INVESTIGATE WAYPOINT DISTRIBUTION** ✅ (DONE 2026-02-25)
    - Check if waypoints are evenly spaced along path
    - Current extraction may cluster waypoints at corners, leave gaps on straight sections
    - File: `src/lib/routing/segmentation.ts` - analyze `extractKeyPoints()`
+   - Implemented:
+     - Distance-based segment splitting (instead of point-count splitting)
+     - Corner-aware waypoint selection with even-distance backfill
+     - Increased defaults to 8 segments × 18 points per segment for better shape anchoring
 
-3. **TRY BICYCLING MODE**
+3. **TRY BICYCLING MODE** ✅ (DONE)
    - Bicycling might follow roads better than walking
    - File: `src/lib/routing/routeSnapper.ts` line 66 - change `WALKING` → `BICYCLING`
 
@@ -206,6 +210,19 @@ The fundamental problem is **SCALE**. Even with 144 waypoints, they're spread to
 
 ---
 
-**Last Updated**: 2024-02-25
-**Status**: Major improvements made, but route shape accuracy still CRITICAL ISSUE
-**Next Session Goal**: Fix scale/waypoint distribution to make shapes actually recognizable
+### 2026-02-25 Session 3
+
+**Fixes Implemented:**
+1. ✅ Reworked segmentation to split by cumulative distance (not raw point count)
+2. ✅ Reworked key waypoint extraction to preserve strongest corners plus uniform spacing
+3. ✅ Increased routing defaults to 8 segments and 18 key points/segment
+4. ✅ Reduced text path simplification tolerance (0.02 → 0.01) to keep more shape detail
+
+**Expected Impact:**
+- Fewer long “jump” segments that cause major detours
+- More evenly distributed guidance points to hold intended shape
+- Better corner retention for text outlines
+
+**Last Updated**: 2026-02-25
+**Status**: Waypoint distribution issue addressed; scale tuning still pending validation
+**Next Session Goal**: Validate with 2km/3km/7km test cases and tune scale constraints in `pathToGeo.ts` if needed

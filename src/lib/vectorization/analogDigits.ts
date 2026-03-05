@@ -39,33 +39,17 @@ const ANALOG_DIGITS: Record<string, Point2D[]> = {
   ],
 
   '2': [
-    // Smooth analog clock "2" - top curve, middle slope, bottom line
-    { x: 0.1, y: 0.2 },
-    { x: 0.15, y: 0.05 },
-    { x: 0.3, y: 0.0 },
-    { x: 0.7, y: 0.0 },
-    { x: 0.85, y: 0.05 },
-    { x: 0.9, y: 0.15 },
-    { x: 0.9, y: 0.3 },
-    { x: 0.85, y: 0.4 },
-    { x: 0.7, y: 0.5 },
-    { x: 0.5, y: 0.6 },
-    { x: 0.3, y: 0.75 },
-    { x: 0.15, y: 0.9 },
-    { x: 0.1, y: 1.0 },
-    { x: 0.9, y: 1.0 },
-    { x: 0.9, y: 0.85 },
-    { x: 0.3, y: 0.85 },
-    { x: 0.5, y: 0.7 },
-    { x: 0.7, y: 0.55 },
-    { x: 0.8, y: 0.4 },
-    { x: 0.8, y: 0.2 },
-    { x: 0.75, y: 0.1 },
-    { x: 0.6, y: 0.05 },
-    { x: 0.4, y: 0.05 },
-    { x: 0.25, y: 0.1 },
-    { x: 0.15, y: 0.18 },
-    { x: 0.1, y: 0.2 },
+    // Ultra-simplified single-line "2" - minimal points for clean GPS art
+    { x: 0.15, y: 0.20 },  // Start left side of top curve
+    { x: 0.30, y: 0.05 },  // Curve up-left
+    { x: 0.50, y: 0.00 },  // Top center
+    { x: 0.70, y: 0.05 },  // Curve up-right
+    { x: 0.85, y: 0.20 },  // Right side
+    { x: 0.82, y: 0.35 },  // Start diagonal
+    { x: 0.65, y: 0.55 },  // Mid diagonal
+    { x: 0.45, y: 0.75 },  // Continue diagonal
+    { x: 0.25, y: 0.92 },  // Bottom-left
+    { x: 0.85, y: 0.92 },  // Bottom bar to right
   ],
 
   '3': [
