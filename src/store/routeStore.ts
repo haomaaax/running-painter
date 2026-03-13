@@ -52,7 +52,7 @@ export const useRouteStore = create<RouteState>((set) => ({
   inputType: 'text',
   inputValue: '',
   targetDistance: 10000, // 10km default
-  gridMode: false,       // Disable by default for cleaner analog routes
+  gridMode: true,        // Enable by default for grid-optimized text routes
   blockSize: 100,        // 100m default block size
 
   userLocation: null,

@@ -164,48 +164,21 @@ export default function InputForm() {
       {/* Distance Input */}
       <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '8px' }}>
-          Target Distance: {localDistance} km
+          Target Distance: {localDistance.toFixed(1)} km
         </label>
         <input
           type="range"
           min="1"
-          max="50"
-          step="1"
+          max="10"
+          step="0.1"
           value={localDistance}
           onChange={(e) => setLocalDistance(Number(e.target.value))}
           style={{ width: '100%' }}
         />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#6b7280', marginTop: '4px' }}>
           <span>1 km</span>
-          <span>50 km</span>
+          <span>10 km</span>
         </div>
-      </div>
-
-      {/* Grid Mode Toggle */}
-      <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
-        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={gridMode}
-            onChange={(e) => setGridMode(e.target.checked)}
-            disabled={localInputType === 'text'}
-            style={{
-              width: '18px',
-              height: '18px',
-              marginRight: '8px',
-              cursor: localInputType === 'text' ? 'not-allowed' : 'pointer',
-            }}
-          />
-          <div>
-            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#15803d' }}>
-              Grid Mode (Shape Only) ✨
-            </span>
-            <p style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '2px' }}>
-              Works for shape input in grid cities like Taipei by converting paths to rectangular blocks.
-              Text input keeps analog-style strokes to preserve digit/letter appearance.
-            </p>
-          </div>
-        </label>
       </div>
 
       {/* Preview */}
