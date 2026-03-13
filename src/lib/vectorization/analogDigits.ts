@@ -8,237 +8,110 @@ import { Point2D } from '../../types/route';
  * Designed for GPS art - simple, recognizable shapes with minimal points
  */
 
+/**
+ * Single-stroke 7-segment style digits optimized for grid-based GPS art
+ *
+ * Design principles:
+ * - Continuous path from start to end (minimal backtracking)
+ * - Grid-aligned (horizontal/vertical segments only)
+ * - Simplified for recognizability on GPS tracks
+ * - Optimized for 1-5km routes on grid cities
+ */
 const ANALOG_DIGITS: Record<string, Point2D[]> = {
   '0': [
-    // Oval shape for zero
-    { x: 0.5, y: 0.0 },
-    { x: 0.75, y: 0.05 },
-    { x: 0.9, y: 0.2 },
-    { x: 0.95, y: 0.5 },
-    { x: 0.9, y: 0.8 },
-    { x: 0.75, y: 0.95 },
-    { x: 0.5, y: 1.0 },
-    { x: 0.25, y: 0.95 },
-    { x: 0.1, y: 0.8 },
-    { x: 0.05, y: 0.5 },
-    { x: 0.1, y: 0.2 },
-    { x: 0.25, y: 0.05 },
-    { x: 0.5, y: 0.0 }, // Close path
+    // Rectangle - U-shape path (open top-left)
+    { x: 0.85, y: 0.15 },  // Start top-right
+    { x: 0.85, y: 0.85 },  // Down right side
+    { x: 0.15, y: 0.85 },  // Across bottom
+    { x: 0.15, y: 0.15 },  // Up left side
+    { x: 0.85, y: 0.15 },  // Across top (completes rectangle)
   ],
 
   '1': [
-    // Vertical line with small top serif
-    { x: 0.35, y: 0.15 },
-    { x: 0.5, y: 0.0 },
-    { x: 0.5, y: 1.0 },
-    { x: 0.3, y: 1.0 },
-    { x: 0.7, y: 1.0 },
-    { x: 0.5, y: 1.0 },
-    { x: 0.5, y: 0.0 },
-    { x: 0.35, y: 0.15 },
+    // Simple vertical line on right side
+    { x: 0.70, y: 0.15 },  // Start top
+    { x: 0.70, y: 0.85 },  // End bottom
   ],
 
   '2': [
-    // Ultra-simplified single-line "2" - minimal points for clean GPS art
-    { x: 0.15, y: 0.20 },  // Start left side of top curve
-    { x: 0.30, y: 0.05 },  // Curve up-left
-    { x: 0.50, y: 0.00 },  // Top center
-    { x: 0.70, y: 0.05 },  // Curve up-right
-    { x: 0.85, y: 0.20 },  // Right side
-    { x: 0.82, y: 0.35 },  // Start diagonal
-    { x: 0.65, y: 0.55 },  // Mid diagonal
-    { x: 0.45, y: 0.75 },  // Continue diagonal
-    { x: 0.25, y: 0.92 },  // Bottom-left
-    { x: 0.85, y: 0.92 },  // Bottom bar to right
+    // Z-shape (7-segment "2")
+    { x: 0.15, y: 0.15 },  // Start top-left
+    { x: 0.85, y: 0.15 },  // Top bar right
+    { x: 0.85, y: 0.50 },  // Down to middle
+    { x: 0.15, y: 0.50 },  // Middle bar left
+    { x: 0.15, y: 0.85 },  // Down to bottom
+    { x: 0.85, y: 0.85 },  // Bottom bar right
   ],
 
   '3': [
-    // Smooth "3" with two curves
-    { x: 0.15, y: 0.15 },
-    { x: 0.25, y: 0.05 },
-    { x: 0.4, y: 0.0 },
-    { x: 0.6, y: 0.0 },
-    { x: 0.75, y: 0.05 },
-    { x: 0.85, y: 0.15 },
-    { x: 0.9, y: 0.25 },
-    { x: 0.85, y: 0.35 },
-    { x: 0.7, y: 0.45 },
-    { x: 0.6, y: 0.5 },
-    { x: 0.7, y: 0.55 },
-    { x: 0.85, y: 0.65 },
-    { x: 0.9, y: 0.75 },
-    { x: 0.85, y: 0.85 },
-    { x: 0.75, y: 0.95 },
-    { x: 0.6, y: 1.0 },
-    { x: 0.4, y: 1.0 },
-    { x: 0.25, y: 0.95 },
-    { x: 0.15, y: 0.85 },
-    { x: 0.1, y: 0.75 },
-    { x: 0.15, y: 0.7 },
-    { x: 0.25, y: 0.75 },
-    { x: 0.25, y: 0.85 },
-    { x: 0.35, y: 0.92 },
-    { x: 0.5, y: 0.95 },
-    { x: 0.65, y: 0.92 },
-    { x: 0.75, y: 0.85 },
-    { x: 0.8, y: 0.75 },
-    { x: 0.75, y: 0.6 },
-    { x: 0.6, y: 0.52 },
-    { x: 0.5, y: 0.5 },
-    { x: 0.6, y: 0.48 },
-    { x: 0.75, y: 0.4 },
-    { x: 0.8, y: 0.25 },
-    { x: 0.75, y: 0.15 },
-    { x: 0.65, y: 0.08 },
-    { x: 0.5, y: 0.05 },
-    { x: 0.35, y: 0.08 },
-    { x: 0.25, y: 0.15 },
-    { x: 0.15, y: 0.15 },
+    // Modified E-shape (readable as "3")
+    { x: 0.15, y: 0.15 },  // Start top-left
+    { x: 0.85, y: 0.15 },  // Top bar right
+    { x: 0.85, y: 0.45 },  // Down right side (upper)
+    { x: 0.30, y: 0.45 },  // Middle bar left (partial)
+    { x: 0.85, y: 0.55 },  // Diagonal to lower right
+    { x: 0.85, y: 0.85 },  // Down right side (lower)
+    { x: 0.15, y: 0.85 },  // Bottom bar left
   ],
 
   '4': [
-    // "4" with vertical and diagonal strokes
-    { x: 0.7, y: 0.0 },
-    { x: 0.7, y: 0.7 },
-    { x: 0.9, y: 0.7 },
-    { x: 0.9, y: 0.8 },
-    { x: 0.7, y: 0.8 },
-    { x: 0.7, y: 1.0 },
-    { x: 0.6, y: 1.0 },
-    { x: 0.6, y: 0.8 },
-    { x: 0.1, y: 0.8 },
-    { x: 0.1, y: 0.7 },
-    { x: 0.6, y: 0.7 },
-    { x: 0.6, y: 0.0 },
-    { x: 0.7, y: 0.0 },
+    // Grid-friendly "4" - right vertical with crossing horizontal
+    { x: 0.15, y: 0.15 },  // Start top-left
+    { x: 0.15, y: 0.60 },  // Down left side
+    { x: 0.85, y: 0.60 },  // Across horizontal bar
+    { x: 0.70, y: 0.60 },  // Back partway (to vertical position)
+    { x: 0.70, y: 0.15 },  // Up to top
+    { x: 0.70, y: 0.85 },  // Down to bottom
   ],
 
   '5': [
-    // "5" with top line, curve on bottom
-    { x: 0.9, y: 0.0 },
-    { x: 0.9, y: 0.1 },
-    { x: 0.2, y: 0.1 },
-    { x: 0.2, y: 0.45 },
-    { x: 0.4, y: 0.45 },
-    { x: 0.6, y: 0.48 },
-    { x: 0.75, y: 0.55 },
-    { x: 0.85, y: 0.65 },
-    { x: 0.9, y: 0.75 },
-    { x: 0.85, y: 0.85 },
-    { x: 0.75, y: 0.95 },
-    { x: 0.6, y: 1.0 },
-    { x: 0.4, y: 1.0 },
-    { x: 0.25, y: 0.95 },
-    { x: 0.15, y: 0.85 },
-    { x: 0.1, y: 0.75 },
-    { x: 0.15, y: 0.7 },
-    { x: 0.2, y: 0.75 },
-    { x: 0.25, y: 0.85 },
-    { x: 0.35, y: 0.92 },
-    { x: 0.5, y: 0.95 },
-    { x: 0.65, y: 0.92 },
-    { x: 0.75, y: 0.85 },
-    { x: 0.8, y: 0.75 },
-    { x: 0.75, y: 0.6 },
-    { x: 0.65, y: 0.53 },
-    { x: 0.5, y: 0.5 },
-    { x: 0.3, y: 0.5 },
-    { x: 0.1, y: 0.48 },
-    { x: 0.1, y: 0.0 },
-    { x: 0.9, y: 0.0 },
+    // Reverse S-shape (mirror of "2")
+    { x: 0.85, y: 0.15 },  // Start top-right
+    { x: 0.15, y: 0.15 },  // Top bar left
+    { x: 0.15, y: 0.50 },  // Down left side to middle
+    { x: 0.85, y: 0.50 },  // Middle bar right
+    { x: 0.85, y: 0.85 },  // Down right side to bottom
+    { x: 0.15, y: 0.85 },  // Bottom bar left
   ],
 
   '6': [
-    // "6" with loop at bottom
-    { x: 0.7, y: 0.05 },
-    { x: 0.5, y: 0.0 },
-    { x: 0.3, y: 0.05 },
-    { x: 0.15, y: 0.15 },
-    { x: 0.08, y: 0.3 },
-    { x: 0.05, y: 0.5 },
-    { x: 0.08, y: 0.7 },
-    { x: 0.15, y: 0.85 },
-    { x: 0.3, y: 0.95 },
-    { x: 0.5, y: 1.0 },
-    { x: 0.7, y: 0.95 },
-    { x: 0.85, y: 0.85 },
-    { x: 0.92, y: 0.7 },
-    { x: 0.95, y: 0.5 },
-    { x: 0.9, y: 0.35 },
-    { x: 0.8, y: 0.5 },
-    { x: 0.7, y: 0.9 },
-    { x: 0.5, y: 0.95 },
-    { x: 0.3, y: 0.9 },
-    { x: 0.2, y: 0.8 },
-    { x: 0.15, y: 0.65 },
-    { x: 0.15, y: 0.5 },
-    { x: 0.2, y: 0.35 },
-    { x: 0.3, y: 0.1 },
-    { x: 0.5, y: 0.05 },
-    { x: 0.65, y: 0.08 },
-    { x: 0.7, y: 0.05 },
+    // b-shape: vertical left side with bottom loop
+    { x: 0.15, y: 0.15 },  // Start top-left
+    { x: 0.15, y: 0.85 },  // Down left side
+    { x: 0.85, y: 0.85 },  // Across bottom
+    { x: 0.85, y: 0.50 },  // Up right side (partial)
+    { x: 0.15, y: 0.50 },  // Across middle back to left
   ],
 
   '7': [
-    // "7" with top line and diagonal
-    { x: 0.1, y: 0.0 },
-    { x: 0.9, y: 0.0 },
-    { x: 0.9, y: 0.1 },
-    { x: 0.4, y: 1.0 },
-    { x: 0.3, y: 1.0 },
-    { x: 0.8, y: 0.1 },
-    { x: 0.1, y: 0.1 },
-    { x: 0.1, y: 0.0 },
+    // L-shape inverted: top bar with diagonal/vertical down
+    { x: 0.15, y: 0.15 },  // Start top-left
+    { x: 0.85, y: 0.15 },  // Top bar right
+    { x: 0.85, y: 0.30 },  // Down a bit
+    { x: 0.40, y: 0.85 },  // Diagonal to bottom-left
   ],
 
   '8': [
-    // "8" with two stacked circles
-    { x: 0.5, y: 0.0 },
-    { x: 0.7, y: 0.03 },
-    { x: 0.85, y: 0.1 },
-    { x: 0.9, y: 0.2 },
-    { x: 0.85, y: 0.3 },
-    { x: 0.7, y: 0.37 },
-    { x: 0.6, y: 0.4 },
-    { x: 0.5, y: 0.43 },
-    { x: 0.4, y: 0.4 },
-    { x: 0.3, y: 0.37 },
-    { x: 0.15, y: 0.3 },
-    { x: 0.1, y: 0.2 },
-    { x: 0.15, y: 0.1 },
-    { x: 0.3, y: 0.03 },
-    { x: 0.5, y: 0.0 },
+    // Two small stacked rectangles (figure-8 simplified)
+    { x: 0.15, y: 0.15 },  // Start top-left
+    { x: 0.85, y: 0.15 },  // Top bar right
+    { x: 0.85, y: 0.45 },  // Down to upper-middle
+    { x: 0.15, y: 0.45 },  // Across to left
+    { x: 0.15, y: 0.15 },  // Back up to close top rect
+    { x: 0.15, y: 0.55 },  // Jump to lower rect start
+    { x: 0.85, y: 0.55 },  // Across to right
+    { x: 0.85, y: 0.85 },  // Down to bottom
+    { x: 0.15, y: 0.85 },  // Across to left
+    { x: 0.15, y: 0.55 },  // Up to close bottom rect
   ],
 
   '9': [
-    // "9" with loop at top (mirror of 6)
-    { x: 0.3, y: 0.95 },
-    { x: 0.5, y: 1.0 },
-    { x: 0.7, y: 0.95 },
-    { x: 0.85, y: 0.85 },
-    { x: 0.92, y: 0.7 },
-    { x: 0.95, y: 0.5 },
-    { x: 0.92, y: 0.3 },
-    { x: 0.85, y: 0.15 },
-    { x: 0.7, y: 0.05 },
-    { x: 0.5, y: 0.0 },
-    { x: 0.3, y: 0.05 },
-    { x: 0.15, y: 0.15 },
-    { x: 0.08, y: 0.3 },
-    { x: 0.05, y: 0.5 },
-    { x: 0.1, y: 0.65 },
-    { x: 0.2, y: 0.5 },
-    { x: 0.3, y: 0.1 },
-    { x: 0.5, y: 0.05 },
-    { x: 0.7, y: 0.1 },
-    { x: 0.8, y: 0.2 },
-    { x: 0.85, y: 0.35 },
-    { x: 0.85, y: 0.5 },
-    { x: 0.8, y: 0.65 },
-    { x: 0.7, y: 0.9 },
-    { x: 0.5, y: 0.95 },
-    { x: 0.35, y: 0.92 },
-    { x: 0.3, y: 0.95 },
+    // d-shape: vertical right side with top loop (inverted 6)
+    { x: 0.85, y: 0.85 },  // Start bottom-right
+    { x: 0.85, y: 0.15 },  // Up right side
+    { x: 0.15, y: 0.15 },  // Across top
+    { x: 0.15, y: 0.50 },  // Down left side (partial)
+    { x: 0.85, y: 0.50 },  // Across middle back to right
   ],
 };
 
@@ -310,4 +183,88 @@ export function isAnalogDigitSupported(char: string): boolean {
  */
 export function getSupportedCharacters(): string[] {
   return Object.keys(ANALOG_DIGITS);
+}
+
+/**
+ * Validate digit design for backtracking issues
+ * Returns metrics about potential backtracking in the design
+ */
+export function validateDigitDesign(digit: Point2D[]): {
+  hasBacktracking: boolean;
+  overlappingSegments: number;
+  totalSegments: number;
+  efficiency: number; // 0-1, where 1 = no backtracking
+  details: string[];
+} {
+  const details: string[] = [];
+  const segments = new Map<string, number[]>();
+
+  // Build segment map (both directions for each segment)
+  for (let i = 0; i < digit.length - 1; i++) {
+    const p1 = digit[i];
+    const p2 = digit[i + 1];
+
+    // Create normalized segment signature (order-independent for horizontal/vertical)
+    const isHorizontal = Math.abs(p1.y - p2.y) < 0.01;
+    const isVertical = Math.abs(p1.x - p2.x) < 0.01;
+
+    if (isHorizontal || isVertical) {
+      // For grid-aligned segments, normalize to canonical form
+      const x1 = Math.min(p1.x, p2.x);
+      const x2 = Math.max(p1.x, p2.x);
+      const y1 = Math.min(p1.y, p2.y);
+      const y2 = Math.max(p1.y, p2.y);
+      const signature = `${x1.toFixed(2)},${y1.toFixed(2)}_${x2.toFixed(2)},${y2.toFixed(2)}`;
+
+      if (!segments.has(signature)) {
+        segments.set(signature, []);
+      }
+      segments.get(signature)!.push(i);
+    }
+  }
+
+  // Find overlapping segments
+  let overlapping = 0;
+  segments.forEach((indices, sig) => {
+    if (indices.length > 1) {
+      overlapping++;
+      details.push(`Segment ${sig} traversed ${indices.length} times at indices: ${indices.join(', ')}`);
+    }
+  });
+
+  const totalSegments = digit.length - 1;
+  const efficiency = totalSegments > 0 ? 1 - (overlapping / totalSegments) : 1;
+
+  return {
+    hasBacktracking: overlapping > 0,
+    overlappingSegments: overlapping,
+    totalSegments,
+    efficiency,
+    details,
+  };
+}
+
+/**
+ * Validate all digit designs and log results
+ */
+export function validateAllDigits(): void {
+  console.log('\n=== Digit Design Validation ===\n');
+
+  Object.entries(ANALOG_DIGITS).forEach(([char, path]) => {
+    const validation = validateDigitDesign(path);
+    const status = validation.hasBacktracking ? '❌' : '✅';
+
+    console.log(`${status} Digit "${char}":`);
+    console.log(`   Points: ${path.length}`);
+    console.log(`   Segments: ${validation.totalSegments}`);
+    console.log(`   Overlapping: ${validation.overlappingSegments}`);
+    console.log(`   Efficiency: ${(validation.efficiency * 100).toFixed(1)}%`);
+
+    if (validation.details.length > 0) {
+      validation.details.forEach(detail => {
+        console.log(`   ⚠️  ${detail}`);
+      });
+    }
+    console.log('');
+  });
 }

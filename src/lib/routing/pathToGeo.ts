@@ -89,23 +89,96 @@ export function pathToGeo(
     return [center];
   }
 
-  // 2. Determine scale factor
-  // We want the path length to approximately match adjustedTargetDistance
-  // (which compensates for grid mode inflation if enabled)
-  // Since normalized path is 0-1, we scale it to meters
+  // 2. Get bounds of normalized path first (needed for scaling calculation)
+  const bounds = getBounds(pathToConvert);
+
+  // 3. Determine scale factor
+  // ADAPTIVE SCALING FOR 1-5KM ROUTES: Optimize for waypoint spacing accuracy
+  // Target: 5-10m spacing between waypoints for best Google Directions accuracy
   let scaleFactor: number;
+  const warnings: string[] = [];
 
   if (scale !== undefined) {
     scaleFactor = scale;
   } else {
-    // Calculate scale based on adjusted target distance
-    // We use a conservative multiplier to account for the fact that
-    // the path might not be a perfect line
-    scaleFactor = adjustedTargetDistance / normalizedLength;
-  }
+    // STEP 1: Estimate waypoint count based on path complexity
+    // For grid paths, this will be the number of corners + guidance points
+    const estimatedWaypoints = Math.min(pathToConvert.length * 0.5, 100);
 
-  // 3. Get bounds of normalized path
-  const bounds = getBounds(pathToConvert);
+    // STEP 2: Calculate ideal scale for target waypoint spacing
+    const idealWaypointSpacing = 8; // meters (sweet spot for Google Directions)
+    const maxWaypointSpacing = 15; // meters (accuracy threshold)
+
+    // Calculate scale to achieve ideal spacing
+    const idealPathLength = estimatedWaypoints * idealWaypointSpacing;
+    const idealScale = idealPathLength / normalizedLength;
+
+    const pathWidth = bounds.width;
+    const pathHeight = bounds.height;
+    const maxDimension = Math.max(pathWidth, pathHeight);
+
+    // STEP 3: Apply grid constraints for 1-5km routes
+    let finalScale = idealScale;
+
+    if (useGridMode && targetDistance <= 5000) {
+      // For short routes on grid cities, constrain to 1.5-3.5 blocks
+      const minBlocks = 1.5;
+      const maxBlocks = 3.5;
+
+      const shapeSizeAtIdealScale = maxDimension * idealScale;
+      const blocksAtIdealScale = shapeSizeAtIdealScale / blockSize;
+
+      if (blocksAtIdealScale > maxBlocks) {
+        // Shape too large - shrink to fit max blocks
+        finalScale = (maxBlocks * blockSize) / maxDimension;
+        warnings.push(
+          `⚠️  Shape scaled down to ${maxBlocks.toFixed(1)} blocks (${(maxBlocks * blockSize).toFixed(0)}m) for waypoint spacing <${maxWaypointSpacing}m`
+        );
+      } else if (blocksAtIdealScale < minBlocks) {
+        // Shape too small - grow to min blocks for better grid alignment
+        finalScale = (minBlocks * blockSize) / maxDimension;
+        warnings.push(
+          `📐 Shape scaled up to ${minBlocks.toFixed(1)} blocks (${(minBlocks * blockSize).toFixed(0)}m) for better grid alignment`
+        );
+      }
+
+      // STEP 4: Validate final waypoint spacing
+      const finalPathLength = normalizedLength * finalScale;
+      const avgSpacing = finalPathLength / estimatedWaypoints;
+
+      if (avgSpacing > maxWaypointSpacing) {
+        warnings.push(
+          `⚠️  Warning: Waypoint spacing ${avgSpacing.toFixed(1)}m may cause shape distortion. ` +
+          `Consider shorter distance or simpler text.`
+        );
+      }
+
+      // Log scaling decisions
+      console.log('📏 Adaptive scaling for 1-5km route:');
+      console.log(`   Target distance: ${formatDistance(targetDistance)}`);
+      console.log(`   Estimated waypoints: ${estimatedWaypoints.toFixed(0)}`);
+      console.log(`   Ideal scale: ${idealScale.toFixed(0)}m/unit → ${shapeSizeAtIdealScale.toFixed(0)}m (${blocksAtIdealScale.toFixed(1)} blocks)`);
+      console.log(`   Final scale: ${finalScale.toFixed(0)}m/unit → ${(maxDimension * finalScale).toFixed(0)}m`);
+      console.log(`   Avg waypoint spacing: ${avgSpacing.toFixed(1)}m`);
+
+      if (warnings.length > 0) {
+        warnings.forEach(w => console.log(`   ${w}`));
+      }
+    } else if (!useGridMode || targetDistance > 5000) {
+      // For longer routes or non-grid mode, use conservative scaling
+      const maxRecommendedSize = blockSize * 2;
+      const shapeMaxSize = maxDimension * idealScale;
+
+      if (shapeMaxSize > maxRecommendedSize) {
+        finalScale = maxRecommendedSize / maxDimension;
+        console.log(`📐 Scale reduced for grid fit: ${idealScale.toFixed(0)}m → ${finalScale.toFixed(0)}m per unit`);
+      } else {
+        finalScale = idealScale;
+      }
+    }
+
+    scaleFactor = finalScale;
+  }
 
   // 4. Convert each point
   const geoPath: LatLng[] = pathToConvert.map(point => {

@@ -36,6 +36,142 @@ function findClosestDistanceIndex(
 }
 
 /**
+ * Detect if a path is grid-aligned (only horizontal/vertical segments)
+ * Returns true if ≥95% of segments are aligned to cardinal directions
+ *
+ * @param path - Path to analyze
+ * @param toleranceDegrees - Tolerance for cardinal direction matching (default 2°)
+ * @returns true if path is grid-aligned
+ */
+export function isPathGridAligned(
+  path: LatLng[],
+  toleranceDegrees: number = 2
+): boolean {
+  if (path.length < 2) return false;
+
+  let gridSegments = 0;
+  let totalSegments = 0;
+
+  for (let i = 1; i < path.length; i++) {
+    const bearing = calculateBearing(path[i - 1], path[i]);
+
+    // Check if bearing is close to 0°, 90°, 180°, or 270° (cardinal directions)
+    const isCardinal = [0, 90, 180, 270].some(cardinalBearing => {
+      const diff = Math.abs(bearing - cardinalBearing);
+      return diff <= toleranceDegrees || diff >= (360 - toleranceDegrees);
+    });
+
+    if (isCardinal) gridSegments++;
+    totalSegments++;
+  }
+
+  const gridRatio = gridSegments / totalSegments;
+  return gridRatio >= 0.95;
+}
+
+/**
+ * Extract only corner points from a grid-aligned path
+ * A corner is where the direction changes significantly (≥80° for grid paths)
+ *
+ * @param path - Grid-aligned path
+ * @param minCornerAngle - Minimum angle change to be considered a corner (default 80°)
+ * @returns Array of corner points including start and end
+ */
+export function extractGridCorners(
+  path: LatLng[],
+  minCornerAngle: number = 85  // INCREASED from 80° to 85° for true right angles
+): LatLng[] {
+  if (path.length <= 2) {
+    return path;
+  }
+
+  const corners: LatLng[] = [path[0]]; // Always include start
+
+  for (let i = 1; i < path.length - 1; i++) {
+    const bearingIn = calculateBearing(path[i - 1], path[i]);
+    const bearingOut = calculateBearing(path[i], path[i + 1]);
+
+    let angleDiff = Math.abs(bearingOut - bearingIn);
+    if (angleDiff > 180) angleDiff = 360 - angleDiff;
+
+    // Only include if this is a significant turn (true corner)
+    // For 7-segment grid-aligned digits, we want strict 90° turns
+    if (angleDiff >= minCornerAngle) {
+      corners.push(path[i]);
+    }
+  }
+
+  corners.push(path[path.length - 1]); // Always include end
+
+  return corners;
+}
+
+/**
+ * Add intermediate waypoints on long straight sections to guide routing
+ * For grid paths, long straight sections need guidance points to prevent detours
+ *
+ * ADAPTIVE SPACING: Adjusts based on target route distance
+ * - Short routes (1-2km): 50m spacing (very tight for accuracy)
+ * - Medium routes (2-5km): 80m spacing (moderate)
+ * - Long routes (5km+): 150m spacing (original behavior)
+ *
+ * @param corners - Corner points extracted from grid path
+ * @param maxSegmentLength - Maximum length before adding intermediate point (default 150m)
+ * @param targetDistance - Target route distance in meters (for adaptive spacing)
+ * @returns Enhanced waypoint array with intermediate guidance points
+ */
+export function addGridGuidancePoints(
+  corners: LatLng[],
+  maxSegmentLength: number = 150,
+  targetDistance?: number
+): LatLng[] {
+  if (corners.length <= 2) {
+    return corners;
+  }
+
+  // ADAPTIVE SPACING based on target distance
+  let adaptiveSpacing = maxSegmentLength;
+  if (targetDistance !== undefined) {
+    if (targetDistance < 2000) {
+      adaptiveSpacing = 50;  // Very tight for short routes
+    } else if (targetDistance < 5000) {
+      adaptiveSpacing = 80;  // Moderate for medium routes
+    } else {
+      adaptiveSpacing = 150; // Original for long routes
+    }
+  }
+
+  const enhanced: LatLng[] = [corners[0]];
+
+  for (let i = 1; i < corners.length; i++) {
+    const prev = corners[i - 1];
+    const curr = corners[i];
+    const distance = haversineDistance(prev, curr);
+
+    // If segment is long, add intermediate points to guide routing
+    if (distance > adaptiveSpacing) {
+      const numIntermediate = Math.floor(distance / adaptiveSpacing);
+
+      // Add evenly-spaced intermediate points along this straight section
+      for (let j = 1; j <= numIntermediate; j++) {
+        const fraction = j / (numIntermediate + 1);
+        const intermediate: LatLng = {
+          lat: prev.lat + (curr.lat - prev.lat) * fraction,
+          lng: prev.lng + (curr.lng - prev.lng) * fraction,
+        };
+        enhanced.push(intermediate);
+      }
+    }
+
+    enhanced.push(curr);
+  }
+
+  console.log(`   Adaptive guidance (${adaptiveSpacing}m spacing): ${corners.length} corners → ${enhanced.length} waypoints`);
+
+  return enhanced;
+}
+
+/**
  * Divide a path into roughly equal segments
  */
 export function divideIntoSegments(
@@ -97,7 +233,8 @@ export function divideIntoSegments(
 export function extractKeyPoints(
   path: LatLng[],
   maxPoints: number = 10,
-  minAngleChange: number = 5 // degrees - reduced to catch more corners
+  minAngleChange: number = 5, // degrees - reduced to catch more corners
+  targetDistance?: number // Target distance for adaptive waypoint spacing
 ): LatLng[] {
   if (path.length <= 2) {
     return path;
@@ -115,6 +252,68 @@ export function extractKeyPoints(
     return [path[0], path[path.length - 1]];
   }
 
+  // GRID-AWARE WAYPOINT STRATEGY: Detect grid-aligned paths and use corner-only extraction
+  const isGridPath = isPathGridAligned(path);
+
+  if (isGridPath) {
+    console.log('🔲 Grid-aligned path detected - using corner-only waypoints');
+    const corners = extractGridCorners(path, 85); // Stricter threshold for 7-segment digits
+
+    console.log(`   Waypoint reduction: ${path.length} → ${corners.length} corners`);
+
+    // Add intermediate guidance points with adaptive spacing based on target distance
+    // Short routes (1-2km): 50m, Medium (2-5km): 80m, Long (5km+): 150m
+    const enhancedWaypoints = addGridGuidancePoints(corners, 150, targetDistance);
+
+    // If enhanced waypoints fit within maxPoints, return them directly
+    if (enhancedWaypoints.length <= pointLimit) {
+      return enhancedWaypoints;
+    }
+
+    // If too many waypoints after enhancement, work with corners only
+    // and skip guidance points (will add them later if needed)
+    if (corners.length <= pointLimit) {
+      return corners;
+    }
+
+    // If too many corners, prioritize by angle magnitude
+    // Score each corner by turn angle
+    const cornerScores: { index: number; angle: number; point: LatLng }[] = [];
+
+    for (let i = 1; i < corners.length - 1; i++) {
+      const corner = corners[i];
+      const prevIdx = path.indexOf(corner) - 1;
+      const nextIdx = path.indexOf(corner) + 1;
+
+      if (prevIdx >= 0 && nextIdx < path.length) {
+        const bearingIn = calculateBearing(path[prevIdx], corner);
+        const bearingOut = calculateBearing(corner, path[nextIdx]);
+        let angleDiff = Math.abs(bearingOut - bearingIn);
+        if (angleDiff > 180) angleDiff = 360 - angleDiff;
+
+        cornerScores.push({ index: i, angle: angleDiff, point: corner });
+      }
+    }
+
+    // Sort by angle (most significant turns first)
+    cornerScores.sort((a, b) => b.angle - a.angle);
+
+    // Select top corners (preserve start/end)
+    const selectedCorners: LatLng[] = [corners[0]]; // Start point
+    const availableSlots = pointLimit - 2;
+
+    cornerScores.slice(0, availableSlots).forEach(({ point }) => {
+      selectedCorners.push(point);
+    });
+
+    selectedCorners.push(corners[corners.length - 1]); // End point
+
+    console.log(`   Top ${selectedCorners.length} corners selected for routing`);
+
+    return selectedCorners;
+  }
+
+  // NON-GRID PATH: Use existing corner + uniform sampling strategy
   // Detect corners with local direction changes and score by turn angle.
   const cornerAngles = new Map<number, number>();
   for (let i = 1; i < path.length - 1; i++) {

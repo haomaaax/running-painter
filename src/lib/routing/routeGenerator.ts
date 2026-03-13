@@ -3,6 +3,7 @@ import { pathToGeo } from './pathToGeo';
 import { snapToRoads } from './routeSnapper';
 import { optimizeDistance } from './distanceOptimizer';
 import { calculatePathDistance, formatDistance } from '../utils/distance';
+import { isPathGridAligned } from './segmentation';
 
 export interface RouteGenerationOptions {
   targetDistance: number; // meters
@@ -58,8 +59,13 @@ export async function generateRoute(
       blockSize,
     });
 
-    console.log('Geographic path generated:', {
+    // Analyze path for grid alignment
+    const isGrid = isPathGridAligned(geoPath);
+
+    console.log('🔍 Path analysis:', {
       points: geoPath.length,
+      isGridAligned: isGrid,
+      gridModeEnabled: gridMode,
       targetDistance: formatDistance(targetDistance),
     });
 
@@ -70,6 +76,7 @@ export async function generateRoute(
       numSegments,
       maxWaypointsPerSegment,
       travelMode: 'BICYCLING',
+      targetDistance, // Pass target distance for adaptive waypoint spacing
       onProgress: (snapProgress, message) => {
         // Map snap progress to 10-80% range
         const overallProgress = 10 + (snapProgress / 100) * 70;

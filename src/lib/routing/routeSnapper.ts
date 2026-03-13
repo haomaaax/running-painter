@@ -5,6 +5,8 @@ import {
   extractKeyPoints,
   samplePointsByDistance,
   mergeSegments,
+  isPathGridAligned,
+  extractGridCorners,
 } from './segmentation';
 import { calculatePathDistance } from '../utils/distance';
 
@@ -12,6 +14,7 @@ export interface SnapOptions {
   numSegments?: number;
   maxWaypointsPerSegment?: number;
   travelMode?: 'WALKING' | 'BICYCLING';
+  targetDistance?: number; // Target distance for adaptive waypoint spacing
   onProgress?: (progress: number, message: string) => void;
 }
 
@@ -32,6 +35,7 @@ export async function snapToRoads(
     numSegments = 8,
     maxWaypointsPerSegment = 18,
     travelMode = 'WALKING',
+    targetDistance,
     onProgress,
   } = options;
 
@@ -40,10 +44,30 @@ export async function snapToRoads(
   }
 
   try {
-    onProgress?.(10, 'Dividing path into segments...');
+    onProgress?.(10, 'Analyzing path and dividing into segments...');
+
+    // GRID-AWARE SEGMENTATION: Detect grid paths and optimize segment count
+    const isGridPath = isPathGridAligned(idealPath);
+    let effectiveNumSegments = numSegments;
+
+    if (isGridPath) {
+      const corners = extractGridCorners(idealPath, 80);
+      const cornerCount = corners.length;
+
+      // Google Directions API supports 25 waypoints per request
+      // For paths with ≤23 corners (leaving room for start/end), use single segment
+      if (cornerCount <= 23) {
+        effectiveNumSegments = 1;
+        console.log(`🎯 Grid path with ${cornerCount} corners - using single segment`);
+      } else {
+        // Use fewer segments proportional to corner count
+        effectiveNumSegments = Math.ceil(cornerCount / 23);
+        console.log(`🎯 Grid path with ${cornerCount} corners - using ${effectiveNumSegments} segments`);
+      }
+    }
 
     // Step 1: Divide into segments
-    const segments = divideIntoSegments(idealPath, numSegments);
+    const segments = divideIntoSegments(idealPath, effectiveNumSegments);
 
     onProgress?.(20, `Processing ${segments.length} segments...`);
 
@@ -63,7 +87,8 @@ export async function snapToRoads(
         const snappedSegment = await snapSegmentToRoads(
           segment,
           maxWaypointsPerSegment,
-          travelMode
+          travelMode,
+          targetDistance
         );
         snappedSegments.push(snappedSegment);
       } catch (error) {
@@ -99,7 +124,8 @@ export async function snapToRoads(
 async function snapSegmentToRoads(
   segment: LatLng[],
   maxWaypoints: number,
-  travelMode: 'WALKING' | 'BICYCLING'
+  travelMode: 'WALKING' | 'BICYCLING',
+  targetDistance?: number
 ): Promise<LatLng[]> {
   if (segment.length < 2) {
     return segment;
@@ -107,7 +133,7 @@ async function snapSegmentToRoads(
 
   // Extract key waypoints (limit to maxWaypoints to fit API constraints)
   // Google Directions API allows max 25 waypoints, but we use fewer for better performance
-  const keyPoints = extractKeyPoints(segment, maxWaypoints);
+  const keyPoints = extractKeyPoints(segment, maxWaypoints, 5, targetDistance);
 
   // If we still have too many points, sample uniformly
   const waypoints =
