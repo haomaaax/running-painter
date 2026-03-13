@@ -93,88 +93,74 @@ export function pathToGeo(
   const bounds = getBounds(pathToConvert);
 
   // 3. Determine scale factor
-  // ADAPTIVE SCALING FOR 1-5KM ROUTES: Optimize for waypoint spacing accuracy
-  // Target: 5-10m spacing between waypoints for best Google Directions accuracy
+  // DISTANCE-FIRST SCALING: Target distance is the PRIMARY driver
+  // Waypoint spacing is validated but doesn't override distance control
   let scaleFactor: number;
-  const warnings: string[] = [];
 
   if (scale !== undefined) {
     scaleFactor = scale;
   } else {
-    // STEP 1: Estimate waypoint count based on path complexity
-    // For grid paths, this will be the number of corners + guidance points
+    // STEP 1: Calculate base scale from target distance
+    // This ensures 5km routes are ~5x larger than 1km routes
+    const baseScale = adjustedTargetDistance / normalizedLength;
+
+    // STEP 2: Estimate waypoint count and spacing at this scale
     const estimatedWaypoints = Math.min(pathToConvert.length * 0.5, 100);
+    const pathLengthAtBaseScale = normalizedLength * baseScale;
+    const avgWaypointSpacing = pathLengthAtBaseScale / estimatedWaypoints;
 
-    // STEP 2: Calculate ideal scale for target waypoint spacing
-    const idealWaypointSpacing = 8; // meters (sweet spot for Google Directions)
-    const maxWaypointSpacing = 15; // meters (accuracy threshold)
-
-    // Calculate scale to achieve ideal spacing
-    const idealPathLength = estimatedWaypoints * idealWaypointSpacing;
-    const idealScale = idealPathLength / normalizedLength;
+    // STEP 3: Validate waypoint spacing
+    const maxSpacing = 15;   // meters - accuracy threshold (ideal is ~8m)
 
     const pathWidth = bounds.width;
     const pathHeight = bounds.height;
     const maxDimension = Math.max(pathWidth, pathHeight);
 
-    // STEP 3: Apply grid constraints for 1-5km routes
-    let finalScale = idealScale;
+    let finalScale = baseScale;
+    const warnings: string[] = [];
 
-    if (useGridMode && targetDistance <= 5000) {
-      // For short routes on grid cities, constrain to 1.5-3.5 blocks
-      const minBlocks = 1.5;
-      const maxBlocks = 3.5;
+    if (avgWaypointSpacing > maxSpacing) {
+      // Spacing too large - route may be inaccurate
 
-      const shapeSizeAtIdealScale = maxDimension * idealScale;
-      const blocksAtIdealScale = shapeSizeAtIdealScale / blockSize;
+      if (useGridMode && targetDistance <= 5000) {
+        // For short grid routes, apply a gentle constraint
+        // Limit max dimension to 6 blocks (not the tiny 1.5-3.5!)
+        const maxBlocks = 6;  // Reasonable upper bound
+        const maxRecommendedSize = blockSize * maxBlocks;
+        const shapeSizeAtBase = maxDimension * baseScale;
 
-      if (blocksAtIdealScale > maxBlocks) {
-        // Shape too large - shrink to fit max blocks
-        finalScale = (maxBlocks * blockSize) / maxDimension;
-        warnings.push(
-          `⚠️  Shape scaled down to ${maxBlocks.toFixed(1)} blocks (${(maxBlocks * blockSize).toFixed(0)}m) for waypoint spacing <${maxWaypointSpacing}m`
-        );
-      } else if (blocksAtIdealScale < minBlocks) {
-        // Shape too small - grow to min blocks for better grid alignment
-        finalScale = (minBlocks * blockSize) / maxDimension;
-        warnings.push(
-          `📐 Shape scaled up to ${minBlocks.toFixed(1)} blocks (${(minBlocks * blockSize).toFixed(0)}m) for better grid alignment`
-        );
-      }
+        if (shapeSizeAtBase > maxRecommendedSize) {
+          finalScale = maxRecommendedSize / maxDimension;
 
-      // STEP 4: Validate final waypoint spacing
-      const finalPathLength = normalizedLength * finalScale;
-      const avgSpacing = finalPathLength / estimatedWaypoints;
-
-      if (avgSpacing > maxWaypointSpacing) {
-        warnings.push(
-          `⚠️  Warning: Waypoint spacing ${avgSpacing.toFixed(1)}m may cause shape distortion. ` +
-          `Consider shorter distance or simpler text.`
-        );
-      }
-
-      // Log scaling decisions
-      console.log('📏 Adaptive scaling for 1-5km route:');
-      console.log(`   Target distance: ${formatDistance(targetDistance)}`);
-      console.log(`   Estimated waypoints: ${estimatedWaypoints.toFixed(0)}`);
-      console.log(`   Ideal scale: ${idealScale.toFixed(0)}m/unit → ${shapeSizeAtIdealScale.toFixed(0)}m (${blocksAtIdealScale.toFixed(1)} blocks)`);
-      console.log(`   Final scale: ${finalScale.toFixed(0)}m/unit → ${(maxDimension * finalScale).toFixed(0)}m`);
-      console.log(`   Avg waypoint spacing: ${avgSpacing.toFixed(1)}m`);
-
-      if (warnings.length > 0) {
-        warnings.forEach(w => console.log(`   ${w}`));
-      }
-    } else if (!useGridMode || targetDistance > 5000) {
-      // For longer routes or non-grid mode, use conservative scaling
-      const maxRecommendedSize = blockSize * 2;
-      const shapeMaxSize = maxDimension * idealScale;
-
-      if (shapeMaxSize > maxRecommendedSize) {
-        finalScale = maxRecommendedSize / maxDimension;
-        console.log(`📐 Scale reduced for grid fit: ${idealScale.toFixed(0)}m → ${finalScale.toFixed(0)}m per unit`);
+          warnings.push(
+            `⚠️  Route scaled down to ${maxBlocks} blocks for waypoint accuracy. ` +
+            `For larger routes, consider longer target distance.`
+          );
+        }
       } else {
-        finalScale = idealScale;
+        // For long routes or non-grid, just warn
+        warnings.push(
+          `⚠️  Waypoint spacing ${avgWaypointSpacing.toFixed(1)}m may cause shape distortion. ` +
+          `Consider simpler text or shorter distance.`
+        );
       }
+    }
+
+    // Log scaling decisions
+    console.log('📏 Distance-first scaling:');
+    console.log(`   Target distance: ${formatDistance(targetDistance)}`);
+    console.log(`   Base scale from distance: ${baseScale.toFixed(0)}m/unit`);
+    console.log(`   Shape size at base scale: ${(maxDimension * baseScale).toFixed(0)}m`);
+    console.log(`   Estimated waypoints: ${estimatedWaypoints.toFixed(0)}`);
+    console.log(`   Avg waypoint spacing: ${avgWaypointSpacing.toFixed(1)}m`);
+
+    if (finalScale !== baseScale) {
+      console.log(`   Final scale (constrained): ${finalScale.toFixed(0)}m/unit`);
+      console.log(`   Final shape size: ${(maxDimension * finalScale).toFixed(0)}m`);
+    }
+
+    if (warnings.length > 0) {
+      warnings.forEach(w => console.log(`   ${w}`));
     }
 
     scaleFactor = finalScale;
