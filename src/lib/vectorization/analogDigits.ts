@@ -19,12 +19,12 @@ import { Point2D } from '../../types/route';
  */
 const ANALOG_DIGITS: Record<string, Point2D[]> = {
   '0': [
-    // Rectangle - U-shape path (open top-left)
-    { x: 0.85, y: 0.15 },  // Start top-right
-    { x: 0.85, y: 0.85 },  // Down right side
-    { x: 0.15, y: 0.85 },  // Across bottom
+    // Rectangle - starts bottom-right (connects well after "2")
+    { x: 0.85, y: 0.85 },  // Start bottom-right
+    { x: 0.15, y: 0.85 },  // Across bottom to left
     { x: 0.15, y: 0.15 },  // Up left side
-    { x: 0.85, y: 0.15 },  // Across top (completes rectangle)
+    { x: 0.85, y: 0.15 },  // Across top to right
+    { x: 0.85, y: 0.85 },  // Down right side (completes rectangle)
   ],
 
   '1': [
@@ -34,13 +34,13 @@ const ANALOG_DIGITS: Record<string, Point2D[]> = {
   ],
 
   '2': [
-    // Z-shape (7-segment "2")
+    // Z-shape - ends bottom-right for easy connection to next digit
     { x: 0.15, y: 0.15 },  // Start top-left
     { x: 0.85, y: 0.15 },  // Top bar right
     { x: 0.85, y: 0.50 },  // Down to middle
     { x: 0.15, y: 0.50 },  // Middle bar left
     { x: 0.15, y: 0.85 },  // Down to bottom
-    { x: 0.85, y: 0.85 },  // Bottom bar right
+    { x: 0.85, y: 0.85 },  // Bottom bar right (end here)
   ],
 
   '3': [
@@ -75,10 +75,11 @@ const ANALOG_DIGITS: Record<string, Point2D[]> = {
   ],
 
   '6': [
-    // b-shape: vertical left side with bottom loop
-    { x: 0.15, y: 0.15 },  // Start top-left
+    // b-shape - starts top-right (connects well after "2"), ends middle-left
+    { x: 0.85, y: 0.15 },  // Start top-right
+    { x: 0.15, y: 0.15 },  // Top bar left
     { x: 0.15, y: 0.85 },  // Down left side
-    { x: 0.85, y: 0.85 },  // Across bottom
+    { x: 0.85, y: 0.85 },  // Across bottom right
     { x: 0.85, y: 0.50 },  // Up right side (partial)
     { x: 0.15, y: 0.50 },  // Across middle back to left
   ],
